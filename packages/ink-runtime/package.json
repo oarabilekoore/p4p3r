@@ -1,0 +1,9 @@
+{
+  "name": "@papermd/ink-runtime",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist"
+  }
+}

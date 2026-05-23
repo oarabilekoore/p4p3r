@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@papermd/types":                ["./packages/types/src/index.ts"],
+      "@papermd/layout-model":         ["./packages/layout-model/src/index.ts"],
+      "@papermd/figure-model":         ["./packages/figure-model/src/index.ts"],
+      "@papermd/ink-runtime":          ["./packages/ink-runtime/src/index.ts"],
+      "@papermd/excalidraw-renderer":  ["./packages/excalidraw-renderer/src/index.ts"]
+    }
+  }
+}
