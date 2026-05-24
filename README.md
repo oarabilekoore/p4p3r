@@ -10,8 +10,6 @@ PaperMd is a local-first, offline pipeline that converts photographs of handwrit
 
 The core thesis is that layout understanding and handwriting recognition are two separate problems that must be solved independently before they can be composed. PaperMd solves them in sequence.
 
-
-
 ## The Problem
 
 Existing document AI is trained on digital PDFs and typed text. It fails on handwriting because handwriting has no implicit grid — ascenders and descenders from adjacent lines overlap in pixel space, ink color varies, ruled lines interfere, and no two people's spatial conventions are the same. Generic tools like LayoutParser and DocLayout-YOLO misclassify entire handwritten pages as a single figure. Tesseract fragments paragraphs into individual lines. There is no production-grade open tool that handles this correctly.
@@ -77,8 +75,6 @@ The following classes are used for layout annotation in Label Studio:
 - **Boxes are consistently loose** — due to ascender/descender overlap between handwritten lines, boxes will clip adjacent ruled lines. This is acceptable. Consistent loose boxes across all images are better than inconsistently tight ones.
 - **Minimum annotation size** — do not annotate content smaller than approximately 20×20px at normalised resolution. Stray marks and marginalia are ignored.
 - **Do not annotate** plain highlighted text or underlined text as separate regions. These are rendering details recovered after detection.
-
-
 
 ## System Architecture
 
@@ -224,7 +220,7 @@ The machine learning components are fully open source. Anyone can use, study, mo
 
 **Application — Business Source License 1.1 (BSL-1.1)**
 
-The PaperMd application is source-available. The code is publicly readable on GitHub. Use is free for personal, non-commercial, and research purposes. Commercial use requires a paid license. Each release automatically converts to GPL-3 four years after its release date.
+The PaperMd application is urce-available. The code is publicly readable on GitHub. Use is free for personal, non-commercial, and research purposes. Commercial use requires a paid license. Each release automatically converts to GPL-3 four years after its release date.
 
 **Free licenses are granted to:**
 NOTE: We havent setup the website yet :(
