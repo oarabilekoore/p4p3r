@@ -18,9 +18,13 @@ export type Formula = {
   type: 'Formula'; id: string; bbox: BBox; latex: string
 }
 export type Figure = {
-  type: 'Figure'; id: string; bbox: BBox
-  figure_type: 'graph' | 'chart' | 'circuit' | 'sketch' | 'unknown'
+  type: 'Figure';
+  id: string;
+  bbox: BBox
+  figure_type: 'graph' | 'chart' | 'circuit' | 'sketch' | 'doodle' | 'unknown';
+  recognised_as?: string
 }
+
 export type Table = {
   type: 'Table'; id: string; bbox: BBox; cells: Cell[]
 }

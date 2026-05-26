@@ -1,1 +1,0 @@
-// Figure subclassifier — v2
