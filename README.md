@@ -35,6 +35,11 @@ PaperMd is being built to solve this specifically and locally, with no external 
 - [ ] Circuit emulation and editing
 - [ ] Multi-language handwriting support
 
+### Important Dates
+
+0. June 10th Application source code review.
+0. June 14th 300 Image PaperMd Scanner Model Release. 
+0. June 21st MVP
 
 ## Research Log
 
