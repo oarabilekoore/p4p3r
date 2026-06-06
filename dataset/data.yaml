@@ -1,6 +1,6 @@
-path: /content/drive/MyDrive/PaperMdDataset
-train: images/train
-val: images/train
+path: /content/drive/MyDrive/Paper
+train: images/training
+val: images/training
 
 nc: 7
 names:
