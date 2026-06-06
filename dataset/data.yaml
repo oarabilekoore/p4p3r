@@ -1,0 +1,13 @@
+path: /content/drive/MyDrive/PaperMdDataset
+train: images/train
+val: images/train
+
+nc: 7
+names:
+  0: Abandon
+  1: Plain_Text
+  2: Formula
+  3: Figure
+  4: Table
+  5: Link
+  6: Callout
