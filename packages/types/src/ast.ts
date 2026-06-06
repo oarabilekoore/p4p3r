@@ -31,13 +31,12 @@ export type Formula = {
   id: string;
   bbox: BBox;
   value: string;
-  mathlang: MathLang;
 };
 export type Figure = {
   type: "Figure";
   id: string;
   bbox: BBox;
-  figure_type: "graph" | "chart" | "circuit" | "sketch" | "doodle" | "unknown";
+  figure_type: "graph" | "chart" | "circuit" | "sketch" | "doodle" | "image";
   recognised_as?: string;
 };
 

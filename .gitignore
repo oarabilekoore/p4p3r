@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Node / Bun
+node_modules/
+.next/
+dist/
+build/
+.turbo/
+bun.lock
+
+# Label Studio backend (generated)
+training/scripts/backend/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+

@@ -1,0 +1,16 @@
+---
+title: "First Inference Run — What the Model Got Wrong and Why"
+date: "May 24, 2026"
+description: "Confidence scores, detection failures, and the data normalisation decisions from the first 24-image evaluation."
+---
+
+I executed my first custom YOLOv11 Nano layout model run on 24 evaluation images. Confidence scores for identified elements ranged between 0.25 and 0.72. 
+
+While it successfully located discrete paragraphs and equations, several things went wrong:
+
+- **Missing Structural Diagrams**: It completely missed a beam cross-section, a spring assembly, and an RLC circuit.
+- **Unmapped Headings**: Bounding boxes for main section headings were absent.
+- **Strikethrough False Positives**: The model bounded valid calculations rather than isolated cancellations.
+- **Rotation Issues**: Bounding boxes degraded severely when processing images with a 90-degree rotation.
+
+To fix these normalization errors, we are enforcing flatbed scanning to eliminate focal plane skew. We are also defining strict hierarchical bounding boxes for nested components in Label Studio to build a cleaner dataset.

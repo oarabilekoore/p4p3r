@@ -1,0 +1,15 @@
+---
+title: "Why Generic Document AI Fails on Handwriting"
+date: "May 7, 2026"
+description: "What happened when we threw LayoutParser, OpenCV, and Tesseract at a page of handwritten notes."
+---
+
+I wanted to automate the layout segmentation of my handwritten notebook pages. 
+
+Here is what failed and why:
+
+- **LayoutParser (EfficientDet)**: Totally failed. It was trained on clean digital PDFs. The variance of my handwriting threw it off completely, and it misclassified the whole page as a single massive table.
+- **Heuristic CV (Open OpenCV)**: Extremely brittle. Simple thresholding and Canny edge detection broke letters into tiny fragments or completely missed light pencil strokes under changing lighting.
+- **Tesseract (Leptonica)**: My best classical run, but inconsistent handwriting line heights caused it to fragment single logical paragraphs into multiple disjointed lines.
+
+These failures forced a pivot to a custom YOLOv11 Nano model. By labeling my own notes in Label Studio and exporting to ONNX, we can target edge inference on low-end hardware like an Intel Celeron, maintaining a robust offline layout AST.
