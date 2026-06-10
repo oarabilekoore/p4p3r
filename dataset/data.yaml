@@ -1,13 +1,19 @@
-path: /content/drive/MyDrive/Paper
+path: /content/drive/MyDrive/dataset
 train: images/training
 val: images/training
-
-nc: 7
+nc: 14
 names:
-  0: Abandon
-  1: Plain_Text
-  2: Formula
-  3: Figure
-  4: Table
-  5: Link
-  6: Callout
+  0: Figure_Sketch
+  1: Text
+  2: Link
+  3: Table
+  4: Formula
+  5: Callout
+  6: List_Item
+  7: Strikeout
+  8: Figure_Graph
+  9: Figure_Image
+  10: Figure_Doodle
+  11: Figure_Electrical
+  12: Figure_Flowchart
+  13: Chemical_Formula

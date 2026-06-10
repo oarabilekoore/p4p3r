@@ -1,20 +1,13 @@
-# Ink-Runtime Model Dependencies 
-
-This folder contains multiple models that the ink-runtime needs in order 
-to perfom multiple element separation functions to build the Ink-AST defined at `docs/ASTScheme.md` .
-
-Below are all sources of these models: 
-
-## Paper.Md Scanner Layout Detection 
-
-This model is the custom layout detection for handwritten notes 
-that the entire project depends on. You may refer to the `training` directory for more models, model related training code. 
-
-## Shape Detecttion for Callouts
-
-Sourced from: [https://github.com/Shahir-Abdullah/Handwritten-Geometric-Shape-Detector](Shahir Abdullah)
-
-Refer to `callout.ts` and the `ShapeDetectorConverter.
-ipynb` file. Furthermore to the `tfjs_model` dir.
-
-## Pix2Text_Mfr
+# Model Performance Report: 
+## Metadata
+- **Model Path:** `../models/papermd_scanner/latest.pt`
+- **Total Images Tested:** 50
+- **Images with Detections:** 38
+## Performance Metrics
+- **Mean Confidence (mConf):** 0.5698
+- **Highest Confidence Image:** 0.9076
+- **Lowest Confidence Image (non-zero):** 0.3682
+## Observations
+- High accuracy samples are located in `./eval_samples/high_accuracy/`
+- Low accuracy samples are located in `./eval_samples/low_accuracy/`
+- Results generated on hardware: Intel Celeron N4020 (NNPACK Disabled)
