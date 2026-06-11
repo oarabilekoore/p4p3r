@@ -1,140 +1,255 @@
+
+import argparse
+import hashlib
+import sqlite3
 import os
 import shutil
-from pathlib import Path
-import sqlite3
-import torch
 from ultralytics import YOLO
+import json
+import time
+import tkinter as tk
+from tkinter import filedialog
+from urllib.parse import unquote
+from rich.console import Console
+from rich.progress import track
+from urllib.parse import unquote
+from pathlib import Path
 
-MODEL_PATH = Path("./models/0610_0832_n30.pt")
-DATASET_IMAGES = Path("../dataset/images/training")
-DATASET_LABELS = Path("../dataset/labels")
-TEST_IMAGES_DIR = Path("./test_images")
-MODELS_OUTPUT_DIR = Path("../models")
+console = Console()
 
+DATASET_IMAGES_DIR = Path("../dataset/images/training")
+DATASET_LABELS_DIR = Path("../dataset/labels")
+MODELS_DIR = Path("./models")
+DB_PATH = Path("./training_info.db")
 
-def get_model_name() -> str:
-    return input("Enter the name of the model: ")
+DEBUG = False
 
 
 def check_paths():
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model weights not found at {MODEL_PATH}")
-    if not DATASET_IMAGES.exists():
-        raise FileNotFoundError(
-            f"Dataset images not found at {DATASET_IMAGES}")
-    if not DATASET_LABELS.exists():
-        raise FileNotFoundError(
-            f"Dataset labels not found at {DATASET_LABELS}")
+    if not MODELS_DIR.exists() or not DATASET_LABELS_DIR.exists():
+        raise FileNotFoundError(f"Models directory or Labels directory not found: {MODELS_DIR} / {DATASET_LABELS_DIR}")
+    if not DATASET_IMAGES_DIR.exists():
+        raise FileNotFoundError(f"Images directory not found: {DATASET_IMAGES_DIR}")
 
 
-def log_model_run(model_nmae: str):
-    db = sqlite3.connect("../dataset/dataset.db")
-
-
-def get_test_images() -> list[Path]:
-    labeled_stems = {p.stem for p in DATASET_LABELS.glob("*.json")}
-    return [
-        img
-        for img in DATASET_IMAGES.glob("*")
-        if img.suffix in [".jpg", ".jpeg", ".png", ".webp"]
-        and img.stem not in labeled_stems
-    ]
-
-
-def create_test_images_dir(images: list[Path]) -> Path:
-    TEST_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-    for img in images:
-        shutil.copy(img, TEST_IMAGES_DIR / img.name)
-    return TEST_IMAGES_DIR
-
-
-def run_model(model_name: str):
-    model = YOLO(MODEL_PATH)
-
-    def custom_forward(x, *args, **kwargs):
-        out = model.model._original_forward(x, *args, **kwargs)
-        if isinstance(out, dict):
-            return out.get("one2one", list(out.values())[0])
-        return out
-
-    if not hasattr(model.model, "_original_forward"):
-        model.model._original_forward = model.model.forward
-        model.model.forward = custom_forward
-
-    test_images = get_test_images()
-    test_image_dir = create_test_images_dir(test_images)
-
-    results = model.predict(
-        source=test_image_dir,
-        conf=0.25,
-        save=True,
-        project="research",
-        name=model_name,
-        exist_ok=True,
+def load_db():
+    db = sqlite3.connect(DB_PATH)
+    cursor = db.cursor()
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS benchmarks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            date TEXT DEFAULT (DATETIME('now', 'localtime')),
+            model_hash TEXT NOT NULL UNIQUE,
+            prediction_file TEXT NOT NULL UNIQUE
+        )"""
     )
-    return results, test_image_dir
+    try:
+        cursor.execute(
+            "ALTER TABLE images ADD COLUMN annotated INTEGER DEFAULT 0"
+        )
+    except sqlite3.OperationalError:
+        pass
+    db.commit()
+    return db, cursor
 
 
-def process_results(results, model_name: str):
-    output_dir = MODELS_OUTPUT_DIR / model_name
-    output_dir.mkdir(parents=True, exist_ok=True)
+def reset_benchmarks_table():
+    """Drop and recreate benchmarks table. Debug only."""
+    db = sqlite3.connect(DB_PATH)
+    cursor = db.cursor()
+    cursor.execute("DROP TABLE IF EXISTS benchmarks")
+    db.commit()
+    db.close()
+    console.print("[yellow][DEBUG] Benchmarks table dropped and will be recreated.[/yellow]")
 
-    image_perf = []
-    for res in results:
-        avg_conf = res.boxes.conf.mean().item() if len(res.boxes.conf) > 0 else 0.0
-        image_perf.append(
-            {
-                "path": res.path,
-                "conf": avg_conf,
-                "saved_path": os.path.join(res.save_dir, os.path.basename(res.path)),
-            }
+
+def hash_model_file(model_path: str) -> str:
+    hasher = hashlib.sha256()
+    with open(model_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def debug_override_existing_hash(cursor, db, model_hash: str):
+    """Delete existing benchmark entry for this hash so it can be re-run. Debug only."""
+    cursor.execute(
+        "SELECT name, prediction_file FROM benchmarks WHERE model_hash = ?",
+        (model_hash,)
+    )
+    row = cursor.fetchone()
+    if row:
+        name, prediction_file = row
+        console.print(f"[yellow][DEBUG] Existing benchmark '{name}' found — deleting entry.[/yellow]")
+        cursor.execute("DELETE FROM benchmarks WHERE model_hash = ?", (model_hash,))
+        old_file = Path(prediction_file)
+        if old_file.exists():
+            old_file.unlink()
+            console.print(f"[yellow][DEBUG] Deleted old prediction file: {old_file}[/yellow]")
+        db.commit()
+
+
+def is_model_already_benchmarked(cursor, model_hash: str) -> bool:
+    cursor.execute(
+        "SELECT name FROM benchmarks WHERE model_hash = ?", (model_hash,)
+    )
+    row = cursor.fetchone()
+    if row:
+        console.print(f"[red]✗[/red] Model already benchmarked under the name: '[cyan]{row[0]}[/cyan]'")
+        return True
+    return False
+
+
+def get_images_not_annotated_and_mark_annotated_images() -> list[str]:
+    db, cursor = load_db()
+    images_not_annotated = []
+    annotated_images = []
+
+    for f in track(list(DATASET_LABELS_DIR.iterdir()), description="Reading label files..."):
+        if not f.is_file():
+            continue
+        with open(f, "r") as file:
+            data = json.load(file)
+        filename = Path(unquote(data["task"]["data"]["image"].split("?d=")[1])).name
+        annotated_images.append(filename)
+        cursor.execute(
+            "UPDATE images SET annotated = 1 WHERE filename = ?",
+            (filename,)
         )
 
-    image_perf.sort(key=lambda x: x["conf"], reverse=True)
+    db.commit()
+    console.print(f"[green]✓[/green] Marked [cyan]{len(annotated_images)}[/cyan] images as annotated.")
 
-    high_acc = image_perf[:5]
-    low_acc = [img for img in image_perf if img["conf"] > 0][-5:]
+    for f in DATASET_IMAGES_DIR.iterdir():
+        if not f.is_file():
+            continue
+        if f.name not in annotated_images:
+            images_not_annotated.append(f.name)
 
-    eval_dir = output_dir / "eval_samples"
-    eval_dir.mkdir(parents=True, exist_ok=True)
-
-    def copy_samples(samples, folder_name):
-        target = eval_dir / folder_name
-        target.mkdir(parents=True, exist_ok=True)
-        for img in samples:
-            if os.path.exists(img["saved_path"]):
-                shutil.copy(img["saved_path"], target)
-
-    copy_samples(high_acc, "high_accuracy")
-    copy_samples(low_acc, "low_accuracy")
-
-    all_confs = [img["conf"] for img in image_perf if img["conf"] > 0]
-    avg_total_conf = sum(all_confs) / len(all_confs) if all_confs else 0
-
-    readme_content = f"""# Model Performance Report: {model_name}
-## Metadata
-- **Model Path:** `{MODEL_PATH}`
-- **Total Images Tested:** {len(results)}
-- **Images with Detections:** {len(all_confs)}
-## Performance Metrics
-- **Mean Confidence (mConf):** {avg_total_conf:.4f}
-- **Highest Confidence Image:** {f"{high_acc[0]["conf"]:.4f}" if high_acc else "N/A"}
-- **Lowest Confidence Image (non-zero):** {f"{low_acc[-1]["conf"]:.4f}" if low_acc else "N/A"}
-## Observations
-- High accuracy samples are located in `./eval_samples/high_accuracy/`
-- Low accuracy samples are located in `./eval_samples/low_accuracy/`
-- Results generated on hardware: Intel Celeron N4020 (NNPACK Disabled)
-"""
-
-    readme_path = output_dir / "README.md"
-    with open(readme_path, "w") as f:
-        f.write(readme_content)
-
-    print(f"Evaluation complete. Files saved to {output_dir}")
-    print(f"README created at {readme_path}")
+    db.close()
+    console.print(f"[green]✓[/green] Found [cyan]{len(images_not_annotated)}[/cyan] unannotated images.")
+    return images_not_annotated
 
 
-check_paths()
-model_name = get_model_name()
-results, test_image_dir = run_model(model_name)
-process_results(results, model_name)
+def move_images_not_annotated_to_special_dir(imagesList: list[str]) -> Path:
+    test_dir = MODELS_DIR / "test_images"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for filename in track(imagesList, description="Copying test images..."):
+        src = DATASET_IMAGES_DIR / filename
+        if src.exists():
+            shutil.copy(str(src), test_dir / filename)
+            copied += 1
+        else:
+            console.print(f"[yellow]Warning:[/yellow] {filename} not found, skipping.")
+    console.print(f"[green]✓[/green] Copied [cyan]{copied}[/cyan] images to test directory.")
+    return test_dir
+
+
+def select_model_file():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="Select YOLO Model",
+        filetypes=[("PyTorch Model", "*.pt")]
+    )
+    return file_path
+
+
+def commit_model_details_to_db(cursor, db, name, model_hash, prediction):
+    cursor.execute(
+        "INSERT INTO benchmarks (name, model_hash, prediction_file) VALUES (?,?,?)",
+        (name, model_hash, str(prediction))
+    )
+    db.commit()
+
+
+def benchmark_model(model_name: str | None, model_path: str | None):
+    if DEBUG:
+        reset_benchmarks_table()
+
+    check_paths()
+    db, cursor = load_db()
+
+    console.print("[bold]Model Benchmarker[/bold]")
+
+    if not model_name:
+        model_name = console.input("[cyan]Enter the name of the model:[/cyan] ").strip()
+
+    if not model_path:
+        console.print("[cyan]A dialog will open — select the .pt model file.[/cyan]")
+        time.sleep(2)
+        model_path = select_model_file()
+
+    if not model_path:
+        console.print("[red]✗[/red] No file selected, exiting.")
+        db.close()
+        return
+
+    console.print(f"[green]✓[/green] Model file selected: [cyan]{model_path}[/cyan]")
+
+    model_hash = hash_model_file(model_path)
+
+    if DEBUG:
+        debug_override_existing_hash(cursor, db, model_hash)
+    elif is_model_already_benchmarked(cursor, model_hash):
+        db.close()
+        return
+
+    images_not_annotated = get_images_not_annotated_and_mark_annotated_images()
+
+    if not images_not_annotated:
+        console.print("[yellow]No unannotated images found, exiting.[/yellow]")
+        db.close()
+        return
+
+    img_dir = move_images_not_annotated_to_special_dir(images_not_annotated)
+
+    model = YOLO(model_path)
+    labelled_dir = MODELS_DIR / f"{model_name}_labelled"
+    labelled_dir.mkdir(parents=True, exist_ok=True)
+    prediction_file = MODELS_DIR / f"{model_name}.jsonl"
+
+    console.print(f"[cyan]Running model against {len(images_not_annotated)} images...[/cyan]")
+    results = model.predict(
+        source=str(img_dir),
+        conf=0.25,
+        save=True,
+        project=str(MODELS_DIR),
+        name=f"{model_name}_labelled",
+        exist_ok=True
+    )
+
+    with open(prediction_file, "w") as pf:
+        for r in results:
+            image_filename = Path(r.path).name
+            boxes = []
+            if r.boxes is not None:
+                boxes = [
+                    {
+                        "class_id": int(box.cls),
+                        "class_name": model.names[int(box.cls)],
+                        "confidence": float(box.conf),
+                        "xyxy": box.xyxy.tolist()
+                    }
+                    for box in r.boxes
+                ]
+            pf.write(json.dumps({"image": image_filename, "boxes": boxes}) + "\n")
+
+    commit_model_details_to_db(cursor, db, model_name, model_hash, prediction_file)
+    console.print(f"[green]✓[/green] Benchmark complete.")
+    console.print(f"[green]✓[/green] Predictions saved to [cyan]{prediction_file}[/cyan]")
+    console.print(f"[green]✓[/green] Labelled images saved to [cyan]{labelled_dir}[/cyan]")
+    db.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Benchmark a YOLO model against unannotated images.")
+    parser.add_argument("--name", type=str, help="Name for this benchmark run", default=None)
+    parser.add_argument("--model", type=str, help="Path to the .pt model file", default=None)
+    args = parser.parse_args()
+    benchmark_model(args.name, args.model)
+
+
+main()
