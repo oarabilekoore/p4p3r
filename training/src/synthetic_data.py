@@ -76,10 +76,6 @@ def render_text(pen: ImageDraw, ink: Writer):
 
 
 page, pen = create_a4_page()
-writer: Writer = {
-    row: 2,
-    col: 0,
-    text: "Hello World"
-}
+writer = Writer(row=2, col=0, text="Hello World")
 
 render_text(pen, writer)
