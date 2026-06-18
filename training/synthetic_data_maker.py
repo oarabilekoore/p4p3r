@@ -1,11 +1,14 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from types import SimpleNamespace
+from typing impprt NamedTuple
+from path import Path
+from enum import Enum
 import os
 
 TARGET_DPI = 300
 
 
-def createA4Page(output_filename: str = "4_quire_page.png"):
+def create_a4_page() -> Image, ImageDraw:
     pageDimensions = SimpleNamespace(
         w=21.0,
         h=29.7,
@@ -44,10 +47,33 @@ def createA4Page(output_filename: str = "4_quire_page.png"):
         draw.line([right_margin_x, 0, right_margin_x,
                   height_px], fill="#E05050", width=2)
 
-    page.save(output_filename, dpi=(TARGET_DPI, TARGET_DPI))
-    print(f"Success! Digital page layout saved safely as: {
-          os.path.abspath(output_filename)}")
-    print(f"File written. Size: {os.path.getsize(output_filename)} bytes")
+    return page, draw
 
 
-createA4Page()
+class Font(Enum):
+    JustAnotherHand = Path("./assets/JustAnotherHand-Regular.ttf")
+    PatrickHandRegular = Path("./assets/PatrickHand-Regular.ttf")
+    PacifoRegular = Path("./assets/Pacifico-Regular.ttf")
+    CaveatMedium = Path("./assets/Caveat-Medium.ttf")
+    CaveatSemiBold = Path("./assets/Caveat-SemiBold.ttf")
+    CaveatBold = Path("./assets/Caveat-Bold.ttf")
+    CaveatRegular = Path("./assets/Caveat-Regular.ttf")
+    CaveatVariable = Path("./assets/Caveat-VariableFont_wght.ttf")
+
+
+for font in Font:
+    if not font.exists():
+        raise FileNotFoundError(f"Font misssing in assets dir: {font}")
+
+
+class Writer(NamedTuple):
+    row_idx: int
+    col_idx: int
+    text: str
+
+
+def render_text(pen: ImageDraw, entry: Writer):
+
+
+page, pen = create_a4_page()
+render_text(pen, "Hello World")
