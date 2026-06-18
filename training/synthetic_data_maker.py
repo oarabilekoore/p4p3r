@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 from types import SimpleNamespace
-from typing impprt NamedTuple
+from typing import NamedTuple
 from path import Path
 from enum import Enum
 import os
@@ -67,13 +67,19 @@ for font in Font:
 
 
 class Writer(NamedTuple):
-    row_idx: int
-    col_idx: int
+    row: int
+    col: int
     text: str
 
 
-def render_text(pen: ImageDraw, entry: Writer):
+def render_text(pen: ImageDraw, ink: Writer):
 
 
 page, pen = create_a4_page()
-render_text(pen, "Hello World")
+writer: Writer = {
+    row: 2,
+    col: 0,
+    text: "Hello World"
+}
+
+render_text(pen, writer)
