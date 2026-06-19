@@ -1,81 +1,140 @@
-from PIL import Image, ImageDraw, ImageFont
-from types import SimpleNamespace
-from typing import NamedTuple
-from path import Path
+from dataclasses import dataclass
 from enum import Enum
-import os
+from pathlib import Path
+from typing import NamedTuple
 
-TARGET_DPI = 300
+from PIL import Image, ImageDraw, ImageFont
+
+_ASSETS = Path("../assets/fonts")
+TARGET_DPI: int = 300
+INCH_PER_CM: float = 1 / 2.54
 
 
-def create_a4_page() -> Image, ImageDraw:
-    pageDimensions = SimpleNamespace(
-        w=21.0,
-        h=29.7,
+@dataclass(frozen=True)
+class PageSpec:
+    noOfRuledLines: int
+    topLineOffset: float
+    bottomLineOffset: float
+    leftBorderOffset: float
+    rightBorderOffset: float
+
+
+@dataclass(frozen=True)
+class PageSizeSpec:
+    w: float
+    h: float
+
+
+class Page(Enum):
+    FeintAndMargin4Quire = PageSpec(
+        noOfRuledLines=30,
         topLineOffset=2.2,
         bottomLineOffset=1.3,
-        leftBorderLineOffset=2.1,
-        rightBorderLineOffset=1.4,
-        noOfRuledLines=30  # 32 lines in total including the top adnd bottomL
+        leftBorderOffset=2.1,
+        rightBorderOffset=1.4,
     )
 
-    def cmToPx(cm: float) -> int:
-        return int(round((cm * TARGET_DPI)/2.54))
-    width_px = cmToPx(pageDimensions.w)
-    height_px = cmToPx(pageDimensions.h)
 
-    page = Image.new("RGB", (width_px, height_px), color="#F5F5F5")
-    draw = ImageDraw.Draw(page)
+class PageSize(Enum):
+    A4 = PageSizeSpec(w=21.0, h=29.7)
 
-    left_margin_x = cmToPx(pageDimensions.leftBorderLineOffset)
-    right_margin_x = cmToPx(
-        pageDimensions.w - pageDimensions.rightBorderLineOffset)
-    top_line_y = cmToPx(pageDimensions.topLineOffset)
-    bottom_line_y = cmToPx(pageDimensions.h - pageDimensions.bottomLineOffset)
 
-    writing_zone_height = bottom_line_y - top_line_y
-    line_gap = writing_zone_height / (pageDimensions.noOfRuledLines - 1)
+class PageCanvas(NamedTuple):
+    img: Image.Image
+    draw: ImageDraw.ImageDraw
+    size: PageSize
+    page: Page
 
-    for i in range(pageDimensions.noOfRuledLines):
-        current_y = int(top_line_y + (i * line_gap))
-        """draw all horizontal lines"""
-        draw.line([0, current_y, width_px, current_y], fill="#A5C7E8", width=2)
-        # Left vertical margin line (Thicker prominent red)
-        draw.line([left_margin_x, 0, left_margin_x, height_px],
-                  fill="#E05050", width=4)
-        # Right vertical margin line (Thinner structural red boundary
-        draw.line([right_margin_x, 0, right_margin_x,
-                  height_px], fill="#E05050", width=2)
 
-    return page, draw
+def cmToPx(cm: float, dpi: int = TARGET_DPI) -> int:
+    return int(cm * dpi * INCH_PER_CM)
+
+
+def createPage(size: PageSize, page: Page) -> PageCanvas:
+    spec: PageSpec = page.value
+    sz: PageSizeSpec = size.value
+
+    widthPx = cmToPx(sz.w)
+    heightPx = cmToPx(sz.h)
+
+    img = Image.new("RGB", (widthPx, heightPx), color="#F5F5F5")
+    draw = ImageDraw.Draw(img)
+
+    leftMarginX = cmToPx(spec.leftBorderOffset)
+    rightMarginX = cmToPx(sz.w - spec.rightBorderOffset)
+    topY = cmToPx(spec.topLineOffset)
+    bottomY = cmToPx(sz.h - spec.bottomLineOffset)
+
+    writingHeight = bottomY - topY
+    lineGap = writingHeight / max(spec.noOfRuledLines - 1, 1)
+
+    for i in range(spec.noOfRuledLines):
+        y = int(topY + i * lineGap)
+        draw.line([(0, y), (widthPx, y)], fill="#A5C7E8", width=2)
+
+    draw.line([(leftMarginX, 0), (leftMarginX, heightPx)], fill="#E05050", width=4)
+    draw.line([(rightMarginX, 0), (rightMarginX, heightPx)], fill="#E05050", width=2)
+
+    return PageCanvas(img=img, draw=draw, size=size, page=page)
 
 
 class Font(Enum):
-    JustAnotherHand = Path("./assets/JustAnotherHand-Regular.ttf")
-    PatrickHandRegular = Path("./assets/PatrickHand-Regular.ttf")
-    PacifoRegular = Path("./assets/Pacifico-Regular.ttf")
-    CaveatMedium = Path("./assets/Caveat-Medium.ttf")
-    CaveatSemiBold = Path("./assets/Caveat-SemiBold.ttf")
-    CaveatBold = Path("./assets/Caveat-Bold.ttf")
-    CaveatRegular = Path("./assets/Caveat-Regular.ttf")
-    CaveatVariable = Path("./assets/Caveat-VariableFont_wght.ttf")
+    JustAnotherHand = _ASSETS / "JustAnotherHand-Regular.ttf"
+    PatrickHand = _ASSETS / "PatrickHand-Regular.ttf"
+    Pacifico = _ASSETS / "Pacifico-Regular.ttf"
+    CaveatMedium = _ASSETS / "Caveat-Medium.ttf"
+    CaveatSemiBold = _ASSETS / "Caveat-SemiBold.ttf"
+    CaveatBold = _ASSETS / "Caveat-Bold.ttf"
+    CaveatRegular = _ASSETS / "Caveat-Regular.ttf"
+    CaveatVariable = _ASSETS / "Caveat-VariableFont_wght.ttf"
 
-
-for font in Font:
-    if not font.exists():
-        raise FileNotFoundError(f"Font misssing in assets dir: {font}")
+    def load(self, sizePx: int) -> ImageFont.FreeTypeFont:
+        if not self.value.exists():
+            raise FileNotFoundError(f"Font file not found: {self.value}")
+        return ImageFont.truetype(str(self.value), size=sizePx)
 
 
 class Writer(NamedTuple):
     row: int
-    col: int
+    col: float
     text: str
+    font: Font
+    fontSizePx: int = 60
+    color: str = "#1A1A2E"
 
 
-def render_text(pen: ImageDraw, ink: Writer):
+def renderText(canvas: PageCanvas, ink: Writer) -> None:
+    spec: PageSpec = canvas.page.value
+    sz: PageSizeSpec = canvas.size.value
+
+    leftMarginX = cmToPx(spec.leftBorderOffset)
+    rightMarginX = cmToPx(sz.w - spec.rightBorderOffset)
+    topY = cmToPx(spec.topLineOffset)
+    bottomY = cmToPx(sz.h - spec.bottomLineOffset)
+
+    writingWidth = rightMarginX - leftMarginX
+    writingHeight = bottomY - topY
+    lineGap = writingHeight / max(spec.noOfRuledLines - 1, 1)
+
+    x = int(leftMarginX + ink.col * writingWidth)
+    y = int(topY + ink.row * lineGap)
+
+    pilFont = ink.font.load(ink.fontSizePx)
+    canvas.draw.text((x, y), ink.text, font=pilFont, fill=ink.color, anchor="ls")
 
 
-page, pen = create_a4_page()
-writer = Writer(row=2, col=0, text="Hello World")
+canvas = createPage(PageSize.A4, Page.FeintAndMargin4Quire)
 
-render_text(pen, writer)
+renderText(
+    canvas,
+    Writer(
+        row=0,
+        col=0.4,
+        text="Hello, PaperMd",
+        font=Font.Pacifico,
+    ),
+)
+
+out = Path("output_page.png")
+canvas.img.save(out, dpi=(TARGET_DPI, TARGET_DPI))
+print(f"Saved → {out}")
