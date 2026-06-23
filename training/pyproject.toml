@@ -5,7 +5,9 @@ description = "All neccesary tools to train,benchmark and create synthetic data"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "numpy>=2.5.0",
     "pillow>=12.2.0",
+    "scipy>=1.18.0",
 ]
 
 [build-system]
