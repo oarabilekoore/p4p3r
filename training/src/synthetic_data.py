@@ -1,81 +1,67 @@
-from PIL import Image, ImageDraw, ImageFont
-from types import SimpleNamespace
-from typing import NamedTuple
-from path import Path
-from enum import Enum
-import os
+from synthetic_data_renderers.text_renderer import Writer, Font, renderText
+from synthetic_data_renderers.page_renderer import PageSize, Page, createPage, PageCanvas
+import sys
+from pathlib import Path
+from PIL import ImageDraw
 
-TARGET_DPI = 300
+# Ensure the project root 'src' is in the python path
+sys.path.append(str(Path(__file__).resolve().parent))
 
-
-def create_a4_page() -> Image, ImageDraw:
-    pageDimensions = SimpleNamespace(
-        w=21.0,
-        h=29.7,
-        topLineOffset=2.2,
-        bottomLineOffset=1.3,
-        leftBorderLineOffset=2.1,
-        rightBorderLineOffset=1.4,
-        noOfRuledLines=30  # 32 lines in total including the top adnd bottomL
-    )
-
-    def cmToPx(cm: float) -> int:
-        return int(round((cm * TARGET_DPI)/2.54))
-    width_px = cmToPx(pageDimensions.w)
-    height_px = cmToPx(pageDimensions.h)
-
-    page = Image.new("RGB", (width_px, height_px), color="#F5F5F5")
-    draw = ImageDraw.Draw(page)
-
-    left_margin_x = cmToPx(pageDimensions.leftBorderLineOffset)
-    right_margin_x = cmToPx(
-        pageDimensions.w - pageDimensions.rightBorderLineOffset)
-    top_line_y = cmToPx(pageDimensions.topLineOffset)
-    bottom_line_y = cmToPx(pageDimensions.h - pageDimensions.bottomLineOffset)
-
-    writing_zone_height = bottom_line_y - top_line_y
-    line_gap = writing_zone_height / (pageDimensions.noOfRuledLines - 1)
-
-    for i in range(pageDimensions.noOfRuledLines):
-        current_y = int(top_line_y + (i * line_gap))
-        """draw all horizontal lines"""
-        draw.line([0, current_y, width_px, current_y], fill="#A5C7E8", width=2)
-        # Left vertical margin line (Thicker prominent red)
-        draw.line([left_margin_x, 0, left_margin_x, height_px],
-                  fill="#E05050", width=4)
-        # Right vertical margin line (Thinner structural red boundary
-        draw.line([right_margin_x, 0, right_margin_x,
-                  height_px], fill="#E05050", width=2)
-
-    return page, draw
+# Import your core layout structures
+# Import your newly refactored elastic rendering structures
 
 
-class Font(Enum):
-    JustAnotherHand = Path("./assets/JustAnotherHand-Regular.ttf")
-    PatrickHandRegular = Path("./assets/PatrickHand-Regular.ttf")
-    PacifoRegular = Path("./assets/Pacifico-Regular.ttf")
-    CaveatMedium = Path("./assets/Caveat-Medium.ttf")
-    CaveatSemiBold = Path("./assets/Caveat-SemiBold.ttf")
-    CaveatBold = Path("./assets/Caveat-Bold.ttf")
-    CaveatRegular = Path("./assets/Caveat-Regular.ttf")
-    CaveatVariable = Path("./assets/Caveat-VariableFont_wght.ttf")
+def run_irl_test_pipeline():
+    print("Initializing Page Canvas (A4 Feint & Margin)...")
+    # 1. Initialize a clean A4 ruled page with lines and margins
+    canvas: PageCanvas = createPage(PageSize.A4, Page.FeintAndMargin4Quire)
+
+    # 2. Define diverse sample payloads to test across different lines and columns
+    test_lines = [
+        Writer(row=2, col=0.05, text="Hello World! This is an elastic font test.",
+               font=Font.PatrickHand, fontSizePx=65),
+        Writer(row=5, col=0.10, text="Mathematical Formula: E = mc²",
+               font=Font.CaveatMedium, fontSizePx=60, color="#2E1A47"),
+        Writer(row=8, col=0.02, text="Skeletal Structure / Organic Chem Notes",
+               font=Font.Pacifico, fontSizePx=55, color="#1A3E2E"),
+        Writer(row=12, col=0.20, text="Table 1.1: Un-constructed matrix data structure",
+               font=Font.JustAnotherHand, fontSizePx=80, color="#4A1A1A"),
+        Writer(row=18, col=0.05, text="Testing edge-case alpha parameters for structural limits.",
+               font=Font.CaveatBold, fontSizePx=58)
+    ]
+
+    print("Rendering and distorting fonts elastically...")
+    # Create a separate draw object to overlay the validation bounding boxes
+    box_draw = ImageDraw.Draw(canvas.img)
+
+    for idx, ink in enumerate(test_lines):
+        # Apply varying warp parameters to test limits
+        # Higher alpha = more wobble. Higher sigma = smoother curves.
+        alpha_val = 15.0 + (idx * 3.0)
+        sigma_val = 4.0 + (idx * 0.5)
+
+        # Render the warped text and extract the exact post-warp bounding box
+        x_min, y_min, x_max, y_max = renderText(
+            canvas=canvas,
+            ink=ink,
+            alpha=alpha_val,
+            sigma=sigma_val
+        )
+
+        # 3. Draw verification bounding box (Simulates YOLO ground-truth confirmation)
+        # This draws a bright green boundary showing exactly where the model thinks the text is
+        box_draw.rectangle([x_min, y_min, x_max, y_max],
+                           outline="#00FF00", width=3)
+        print(f"   ↳ Rendered Line {ink.row} | Box: [{x_min}, {
+              y_min}, {x_max}, {y_max}] (Alpha={alpha_val})")
+
+    # 4. Save the generated evaluation output
+    output_dir = Path("output_tests")
+    output_dir.mkdir(exist_ok=True)
+
+    output_path = output_dir / "synthetic_irl_test_result.png"
+    canvas.img.save(output_path)
+    print(f"Success! Diagnostic image saved to: {output_path.resolve()}")
 
 
-for font in Font:
-    if not font.exists():
-        raise FileNotFoundError(f"Font misssing in assets dir: {font}")
-
-
-class Writer(NamedTuple):
-    row: int
-    col: int
-    text: str
-
-
-def render_text(pen: ImageDraw, ink: Writer):
-
-
-page, pen = create_a4_page()
-writer = Writer(row=2, col=0, text="Hello World")
-
-render_text(pen, writer)
+run_irl_test_pipeline()
