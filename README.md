@@ -43,4 +43,4 @@ The problem is I want the document layout to be preserved, not just the text.
 
 ## Licensing
 
-Business Source License 1.1
+MIT
